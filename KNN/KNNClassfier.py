@@ -1,7 +1,7 @@
 import numpy as np
 from math import sqrt
 from collections import Counter
-from Utils.AccuracyFunction import accuracy_score
+from Utils.AccuracyFunction import precision_score
 
 class KNNClassfier:
     #初始化分类器
@@ -47,7 +47,7 @@ class KNNClassfier:
     #准确度效果评估
     def score(self, X_test, y_test):
         y_predict = self.predict(X_test)
-        return accuracy_score(y_test, y_predict)
+        return precision_score(y_test, y_predict)
 
     def __repr__(self):
         return "KNN(k = %d)" % self.k

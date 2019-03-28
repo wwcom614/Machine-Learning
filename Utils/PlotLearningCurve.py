@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 def plot_learning_curve(ML, X_train, X_test, y_train, y_test):
     train_score = []
     test_score = []
-    #学习曲线：随训练样本数的增多，训练数据集的预测RMSE和测试数据集的预测RMSE的趋势图
+    #学习曲线：随训练样本数的增多，训练数据集的预测RMSE和测试数据集的预测RMSE的趋势图，可以直观看出过拟合和欠拟合情况
     for i in range(1, len(X_train)+1):
         ML.fit(X_train[:i], y_train[:i])
 

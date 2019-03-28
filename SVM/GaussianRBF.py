@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 
 #直观理解高斯核函数
 #高斯核函数也叫径向基函数---- RBF核 Radial Basis Function Kernal
-
+# 核函数可以将数据映射到高维空间，来解决在原始空间中线性不可分的问题
 
 x = np.arange(-4 ,5 ,1)
 #构造一个线性不可分的数据集

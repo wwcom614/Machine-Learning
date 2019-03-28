@@ -53,7 +53,7 @@ y_predict = knn_clf.predict(X_test)
 
 from sklearn.metrics import accuracy_score
 
-print("sklearn baccuracy_score:", accuracy_score(y_test, y_predict))
+print("sklearn accuracy_score:", accuracy_score(y_test, y_predict))
 # sklearn accuracy_score:0.9944444444444445
 
 #使用交叉验证, 默认分3份，cv参数可以指定分几份

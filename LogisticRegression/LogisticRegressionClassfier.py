@@ -1,5 +1,5 @@
 import numpy as np
-from Utils.AccuracyFunction import accuracy_score
+from Utils.AccuracyFunction import precision_score
 
 class LogisticRegressionClassfier:
     def __init__(self):
@@ -63,7 +63,7 @@ class LogisticRegressionClassfier:
 
     def score(self, X_test, y_test):
         y_predict = self.predict(X_test)
-        return accuracy_score(y_test, y_predict)
+        return precision_score(y_test, y_predict)
 
     def __repr__(self):
         return "Logistic Regression"
