@@ -1,9 +1,9 @@
 学习传统机器学习领域知识时，边学习边编码实践，深入理解传统机器学习算法底层数学原理后，仿scikit-learn封装函数实现传统机器学习算法类，最后实践调用scikit-learn对比。   
-含随机拆分样本为训练集和测试集、数据集标准化、拟合fit、预测predict，效果评估r2、KNN分类和回归、线性回归、梯度下降法(非机器学习算法)、PCA、多项式回归、逻辑回归、分类效果评估方法、SVM、决策树、集成学习等。
+含随机拆分样本为训练集和测试集、数据集标准化、拟合fit、预测predict，效果评估r2、KNN分类和回归、线性回归、梯度下降法(非机器学习算法)、PCA、多项式回归、逻辑回归、分类效果评估方法、SVM、决策树、集成学习、Kmeans等。
+代码演练了推荐系统项目中的ICF和UCF协同过滤，GridSearch结合效果评估看推荐效果。  
 
-## NumpyMatplotlib
-
-   传统机器学习所需的Numpy和Matploblib的一些基础尝试练习。
+## NumpyMatplotlib   
+传统机器学习所需的Numpy和Matploblib的一些基础尝试练习。   
 
 ## KNN 
 - KNNStepByStep.py：  
@@ -215,4 +215,46 @@ scikit-learn随机森林分类器 和 Extra Trees分类器。
 特征提取：选取用户userId、电影itemId和时间作为特征，文件中时间特征是精确到秒的，直接作为特征是不合适的，因为人的兴趣变化没那么快，所以转换时间精确到天。  
 评分score作为标记。  
 分别使用KMeans、MiniBatchKMeans、Birch的聚类算法，设置超参数n_clusters=5(因为评分是1~5),进行聚类训练fit模型，并分别进行效果评估。  
+
+##  Recommend   
+之前项目中使用过协同过滤算法，使用网上下载的MovieLens的数据集再演练一把，算法思路为主。     
+-  ItemBasedCF.py   
+物品-物品相似协同过滤。  
+1._loadData方法：读取训练文件和测试文件，获取用户、物品、评分字段。计算相似度，不需要时间戳字段，_丢弃，形成data\[userId]\[itemId]=score。  
+2.calItemsSimilarity方法，计算输出 物品i-物品j 相似度矩阵：  
+(1)构建每个物品-购买用户数量的字典item_usersCount：遍历训练数据集，获取到所有用户购买的items；再遍历所有items，累计每个物品-购买用户数。     
+(2)构建物品i-物品j共现矩阵co_itemi_itemj：物品i-物品j共现矩阵中，如果是自身，不打标记，直接跳过；物品i 和 物品j 有重合购买用户，计数+1。       
+(3)物品i-物品j 相似度矩阵 {i:{j:相似度, ...}, ...}itemSimiMatrix：遍历物品i-物品j共现矩阵，计算物品i和物品j的余弦相似度矩阵itemSimiMatrix\[i]\[j] = cij / math.sqrt(item_usersCount\[i] * item_usersCount\[j])。     
+3.recommend方法，给用户userU推荐topN个最相似的物品： 
+(1)超参数userU_item_simiItemsTopN：对用户userU购买的每种物品，最多取多少个最相似的物品。  
+(2)遍历用户userU购买的每种物品i-物品j 相似度矩阵 {i:{j:相似度, ...}, ...},每次按相似度倒序排序，取相似度最高的前userU_item_simiItemsTopN组"物品i-物品j"，最多会取出用户userU购买过的  所有物品数*userU_item_simiItemsTopN  组数据。  
+(3)如果相似度矩阵中的物品j是用户userU已经购买过的物品i，直接跳过，不推荐该物品。  
+(4)考虑相似度最高的物品itemJ的评分影响，相似度=simiIJ * score加权，取相似度最高的topN个物品j，作为最终推荐结果。  
+4.recallAndPrecision方法，推荐效果评估--召回率Recall和精准率Precision：  
+(1)hit：推荐的物品列表recommendItems && 测试集中，真被用户购买的物品testUserItems，两者交集。  
+(2)召回率Recall：hit/测试集中所有用户真实购买物品数量。  
+(3)精准率Precision：hit/为所有用户预测的物品结果数量。   
+5.coverage方法，推荐效果评估--覆盖率：  
+(1)allItemSet：遍历所有用户购买的所有物品，放入set排重。  
+(2)recommendItemSet：遍历所有用户推荐的所有物品，放入set排重。  
+(3)推荐的排重物品allItemSet数量 / 总排重物品recommendItemSet数量 
+6.popularity方法，推荐效果评估--流行度，基尼系数，防马太效应：  
+(1)item_count：每个item及其被购买的次数。  
+(2)recommendItem_count：所有用户被推荐的每个物品被购买的次数。    
+(3)流行度：ret+=math.log(1+item_count\[item])；ret/(recommendItem_count\*1.0)。  
+7.main方法中，结合效果评估，对超参数userU_item_simiItemsTopN做GridSearch调优。  
+
+-  UserBasedCF.py   
+用户-用户购买物品行为相似协同过滤。内部方法与ItemBasedCF基本一致，calItemsSimilarity方法和recommend方法有所区别。  
+1.calItemsSimilarity方法，计算输出 用户u-用户v 相似度矩阵：  
+(1)构建物品-不同购买用户列表的字典item_diffUsers：key是itemId，value是购买该item的不同用户set集合。  
+(2)构建每个用户-购买物品数量的字典user_itemsCount：遍历item_diffUsers，按每个用户统计，累计每个用户-购买物品数量。       
+(3)构建用户u-用户v共现矩阵co_useru_userv：用户u-用户v共现矩阵中，如果是自身，不打标记，直接跳过；用户u和用户v对某itemId都有购买，计数+1。       
+(4)用户u-用户v 相似度矩阵 {u:{v:相似度, ...}, ...}userSimiMatrix：遍历用户u-用户v共现矩阵，计算物品i和物品j的余弦相似度矩阵userSimiMatrix\[u]\[v]=cuv/math.sqrt(user_itemsCount\[u]\*user_itemsCount\[v])。     
+2.recommend方法，给用户userU推荐topN个最相似的物品： 
+(1)超参数userU_simiUsersTopN：用户u-用户v 相似度矩阵，取出与用户userU最相关的前userU_simiUsersTopN个用户。  
+(2)训练集中获取与用户userU购买行为最相似的用户userV购买的物品和评分
+(3)如果与用户userU最相关的userV购买的物品，用户userU之前已经购买过了，直接跳过，不推荐该物品。  
+(4)考虑相似度最高的物品userV_item的评分影响，相似度=simiUV * userV_score加权，取相似度最高的topN个物品j，作为最终推荐结果。  
+
 
