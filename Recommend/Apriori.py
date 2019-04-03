@@ -6,7 +6,6 @@
 # (3)从候选项集C2开始，通过支持度过滤生成L2。L2根据Apriori原理拼接成候选项集C3；C3通过支持度过滤生成L3……直到Lk中仅有一个或没有数据项为止。
 # Apriori算法不适用于非重复项集数元素较多的案例，建议分析的商品种类10左右
 
-
 # 读取数据集
 def loadData(data):
     # 加载数据集data
@@ -38,18 +37,21 @@ def _createC1(dataSet):
     return C1
 
 
-# 候选项集Ck，提取支持度>minSupport的项们，录入频繁项集Lk
-# 入参：物品排重数据集dataSet、候选项集Ck、最小支持度阈值minSupport
+# 候选项集Ck中，提取支持度>minSupport的项们，录入频繁项集Lk
+# k的含义是每笔交易含k个物品
+# 入参dataSet：物品排重数据集
+# 入参Ck：候选项集
+# 入参minSupport：超参数，最小支持度阈值
 # 候选项集Ck由上一层(第k-1层)的频繁项集Lk-1组合得到
 # 使用设置的超参数最小支持度minSupport对候选集Ck过滤
 # 返回值：本层(第k层)的频繁项集Lk，以及每项的支持度
 def _calFrequentItemsSetLk(dataSet, Ck, minSupport):
-    # 定义字典candidate_count_dict，key是候选项，value是该候选项出现在数据集交易中的笔数
-    candidate_count_dict = {}
-
-    # 计算前，对每次要遍历的数据集做好过滤，减少数据量，提高计算性能
+    # 每次遍历前，对数据集做过滤，只保留>=候选项集每笔交易中物品数量的交易记录，减少数据量和遍历次数，节约计算资源，提高计算性能
     print("【len(Ck[0])】：", len(Ck[0]))
     fileredDataSet = [item for item in dataSet if len(item) >= len(Ck[0])]
+
+    # 定义字典candidate_count_dict，key是候选项，value是该候选项出现在数据集交易中的笔数
+    candidate_count_dict = {}
 
     # 遍历过滤后的数据集的每笔交易
     for transaction in fileredDataSet:
@@ -75,17 +77,19 @@ def _calFrequentItemsSetLk(dataSet, Ck, minSupport):
         # 只保留支持度>阈值的记录，从列表头部录入，形成频繁项集Lk
         if support >= minSupport:
             Lk.insert(0, key)
+        # 顺便记录每次计算的support，形成项集支持度矩阵
         candidate_support_dict[key] = support
     return Lk, candidate_support_dict
 
 
-# 入参：频繁项集Lk-1，本次计算k项的候选项集
-# 连接转换为k项的候选项集Ck
+# 从频繁项集Lk-1中，提取两两交集为k项的项集，合并后排重录入下一级候选项集Ck
+# 入参Lk_1：频繁项集Lk-1，
+# 入参k：本次计算k项的候选项集
 def _calCandidateItemsSetCk(Lk_1, k):
     # k是从2开始的，也就是最开始传进来的是频繁项集L1，要计算候选项集C2
     Ck = []
     # 前一项与后面所有项逐个比较
-    for i in range(0, len(Lk_1)-1):
+    for i in range(0, len(Lk_1) - 1):
         L1 = Lk_1[i]
         for j in range(i + 1, len(Lk_1)):
             L2 = Lk_1[j]
@@ -100,22 +104,22 @@ def _calCandidateItemsSetCk(Lk_1, k):
     return Ck
 
 
-# apriori
-def apriori(dataSet, minSupport=0.5):
-    print("===========apriori start!===============")
-    # 构建候选项C1项集。使用frozenset标识_C1为不可变集合
+# apriori算法-迭代寻找交易含k个物品的最大频繁项集Lk：C1->L1->C2->L2->C3->L3->....->Ck->Lk
+def aprioriScanFrequentItemsSetLmax(dataSet, minSupport=0.5):
+    print("===========apriori ScanFrequentItemsSetLmax start!===============")
+    # 调用_createC1构建候选项集C1
     C1 = _createC1(dataSet)
-    print("【1-项集C1】：", C1)
-    # 【1-项集C1】： [frozenset({1}), frozenset({2}), frozenset({3}), frozenset({4}), frozenset({5})]
+    print("【候选项集C1】：", C1)
+    # 【候选项集C1】： [frozenset({1}), frozenset({2}), frozenset({3}), frozenset({4}), frozenset({5})]
 
-    # 基于数据集dataSet、候选项集C1和设置的超参数支持度minSupport，计算出频繁项集L1和候选项-支持度矩阵candidate_support_dict。
+    # 调用_calFrequentItemsSetLk，计算出频繁项集L1和候选项-支持度矩阵candidate_support_dict。
     L1, candidate_support_dict = _calFrequentItemsSetLk(dataSet, C1, minSupport)
     print("【L1】：", L1)
     print("【candidate_support_dict】：", candidate_support_dict)
 
-    # 将频繁项集压入一个列表，便于后面的迭代计算
+    # 将频繁项集压入一个列表，记录中间计算的每个Lk频繁项集的结果，并方便后面的迭代计算。
     L = [L1]
-    # 下一步要开始迭代计算k>=2的频繁项集
+    # 从候选项集C2开始，通过支持度过滤生成L2。L2根据Apriori原理拼接成候选项集C3；C3通过支持度过滤生成L3……直到Lk中仅有一个或没有数据项为止。
     k = 2
     # 迭代计算的终止条件是找不到支持度>minSupport的最长频繁项集Lk
     while (len(L[k - 2]) > 0):
@@ -123,14 +127,86 @@ def apriori(dataSet, minSupport=0.5):
         Ck = _calCandidateItemsSetCk(Lk_1, k)
         print("【C" + str(k) + "】：", Ck)
         if (len(Ck) > 0):
-            Lk, supportK = _calFrequentItemsSetLk(dataSet, Ck, minSupport)
+            Lk, Ck_support_dict = _calFrequentItemsSetLk(dataSet, Ck, minSupport)
+            # 注意：此处要记录k频繁项集的计算结果，然后update添加到candidate_support_dict中，直接赋值candidate_support_dict会被清空覆盖
+            candidate_support_dict.update(Ck_support_dict)
             print("【L" + str(k) + "】：", Lk)
             L.append(Lk)
             k += 1
         else:
             break
 
-    return L, supportK
+    return L, candidate_support_dict
+
+
+# 基于入参，计算输出满足最小置信度的推荐物品列表
+# 入参freqSet：某个频繁项(一组物品)
+# 入参itemsOfFreqSet：某个频繁项freqSet中的每个物品集合
+# 入参supportData：前面计算好的项集支持度矩阵
+# 入参recommendTuples：(已有物品,推荐物品,置信度)的列表
+# 入参minConfidence：预制的超参数最小置信度
+# 返回值recommendItems：推荐物品列表
+def _calConfidence(freqSet, itemsOfFreqSet, supportData, recommendTuples, minConfidence=0.7):
+    recommendItems = []
+    # 遍历某个频繁项freqSet中的每个物品
+    for item in itemsOfFreqSet:
+        # 该物品的置信度= 包括该物品和前置物品的支持度 / 前置物品的支持度
+        confidence = supportData[freqSet] / supportData[freqSet - item]
+        # 过滤，只保留置信度高于预制置信度的数据
+        if confidence >= minConfidence:
+            print(freqSet - item, '-->', item, 'confidence:', confidence)
+            # 元组中的三个元素：前置物品集、推荐物品、置信度
+            recommendTuples.append((freqSet - item, item, confidence))
+            recommendItems.append(item)
+    # 返回后件列表
+    return recommendItems
+
+# 评估频繁项集中元素超过2个的项集进行合并
+# https://www.cnblogs.com/bigmonkey/p/7449761.html
+# 入参freqSet：某个频繁项(一组物品)
+# 入参itemsOfFreqSet：某个频繁项freqSet中的每个物品集合
+# 入参supportData：前面计算好的项集支持度矩阵
+# 入参recommendTuples：(已有物品,推荐物品,置信度)的列表
+#
+def _rulesFromConseq(freqSet, itemsOfFreqSet, supportData, recommendTuples, minConfidence=0.7):
+    '''
+    。
+
+    freqSet(frozenset):频繁项集
+    H(frozenset):频繁项集中的所有元素，即可以出现在规则右部的元素
+    supportData(dict):所有项集的支持度信息
+    brl(tuple):生成的规则
+
+    '''
+    m = len(itemsOfFreqSet[0])
+    # 查看频繁项集是否大到移除大小为 m　的子集
+    if len(freqSet) > m + 1:
+        #
+        Hmp1 = _calCandidateItemsSetCk(itemsOfFreqSet, m + 1)
+        Hmp1 = _calConfidence(freqSet, Hmp1, supportData, recommendTuples, minConfidence)
+
+        # 如果不止一条规则满足要求，进一步递归合并
+        if len(Hmp1) > 1:
+            _rulesFromConseq(freqSet, Hmp1, supportData, recommendTuples, minConfidence)
+
+# 根据之前计算出的频繁项集L和预置超参数最小置信度生成推荐组合列表
+def aprioriGenerateRecommendTuples(L, supportData, minSupport=0.7):
+    # 推荐组合列表
+    recommendTuples = []
+    # 对于寻找关联规则来说，频繁1项集L1没有用处，因为L1中的每个集合仅有一个数据项，至少有两个数据项才能生成A→B这样的关联规则
+    # 所以从频繁项集L2开始逐个遍历
+    for i in range(1, len(L)):
+        # 遍历每个频繁项集Lk中的每个频繁项freqSet(一组物品)
+        for freqSet in L[i]:
+            # itemsOfFreqSet是每个频繁项freqSet中的每个物品集合
+            itemsOfFreqSet = [frozenset([item]) for item in freqSet]
+
+            # 如果频繁项集中的元素个数大于2，需要进一步合并
+            if i > 1:
+                _rulesFromConseq(freqSet, itemsOfFreqSet, supportData, recommendTuples, minSupport)
+            else:
+                _calConfidence(freqSet, itemsOfFreqSet, supportData, recommendTuples, minSupport)
+    return recommendTuples
 
 
 if __name__ == "__main__":
@@ -140,6 +216,26 @@ if __name__ == "__main__":
             [2, 5]]
 
     dataSet = loadData(data)
-    L, supportData = apriori(dataSet=dataSet, minSupport=0.3)
+    # 【dataSet】： [{1, 3, 4}, {2, 3, 5}, {1, 2, 3, 5}, {2, 5}]
+    L, candidate_support_dict = aprioriScanFrequentItemsSetLmax(dataSet=dataSet, minSupport=0.3)
     print("【L】：", L)
-    print("【supportData】：", supportData)
+    print("【supportData】：", candidate_support_dict)
+    '''
+    ===========apriori ScanFrequentItemsSetLmax start!===============
+【候选项集C1】： [frozenset({1}), frozenset({2}), frozenset({3}), frozenset({4}), frozenset({5})]
+【len(Ck[0])】： 1
+【L1】： [frozenset({5}), frozenset({2}), frozenset({3}), frozenset({1})]
+【candidate_support_dict】： {frozenset({1}): 0.5, frozenset({3}): 0.75, frozenset({4}): 0.25, frozenset({2}): 0.75, frozenset({5}): 0.75}
+【C2】： [frozenset({2, 5}), frozenset({3, 5}), frozenset({1, 5}), frozenset({2, 3}), frozenset({1, 2}), frozenset({1, 3})]
+【len(Ck[0])】： 2
+【L2】： [frozenset({2, 3}), frozenset({3, 5}), frozenset({2, 5}), frozenset({1, 3})]
+【C3】： [frozenset({2, 3, 5}), frozenset({1, 2, 3}), frozenset({1, 3, 5})]
+【len(Ck[0])】： 3
+【L3】： [frozenset({2, 3, 5})]
+【C4】： []
+【L】： [[frozenset({5}), frozenset({2}), frozenset({3}), frozenset({1})], [frozenset({2, 3}), frozenset({3, 5}), frozenset({2, 5}), frozenset({1, 3})], [frozenset({2, 3, 5})]]
+【supportData】： {frozenset({1}): 0.5, frozenset({3}): 0.75, frozenset({4}): 0.25, frozenset({2}): 0.75, frozenset({5}): 0.75, frozenset({1, 3}): 0.5, frozenset({2, 5}): 0.75, frozenset({3, 5}): 0.5, frozenset({2, 3}): 0.5, frozenset({1, 5}): 0.25, frozenset({1, 2}): 0.25, frozenset({2, 3, 5}): 0.5, frozenset({1, 2, 3}): 0.25, frozenset({1, 3, 5}): 0.25}
+    '''
+
+    recommendTuples = aprioriGenerateRecommendTuples(L=L, supportData=candidate_support_dict, minSupport=0.6)
+    print("【recommendTuples】：", recommendTuples)

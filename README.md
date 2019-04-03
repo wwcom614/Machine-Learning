@@ -257,4 +257,27 @@ scikit-learn随机森林分类器 和 Extra Trees分类器。
 (3)如果与用户userU最相关的userV购买的物品，用户userU之前已经购买过了，直接跳过，不推荐该物品。  
 (4)考虑相似度最高的物品userV_item的评分影响，相似度=simiUV * userV_score加权，取相似度最高的topN个物品j，作为最终推荐结果。  
 
+- Apriori.py   
+经典的啤酒与尿布算法，寻找超参数支持度minSupport下的最大频繁项集Lk。 
+1.loadData：读取所有用户购买的商品信息，将加载数据集data的每笔交易内按物品排重，录入dataSet。  
+2._createC1：构建候选项集C1。C1中物品排重，顺序排序，使用frozenset标识C1为不可变集合。  
+3._calFrequentItemsSetLk，从候选项集Ck中，提取支持度>minSupport的项们，录入频繁项集Lk：  
+注：k的含义是每笔交易含k个物品。   
+(1)入参：物品排重数据集dataSet、候选项集Ck、最小支持度阈值minSupport。  
+(2)每次遍历前，对数据集做过滤，只保留>=候选项集每笔交易中物品数量的交易记录，减少数据量和遍历次数，节约计算资源，提高计算性能。  
+(3)构建字典candidate_count_dict，key是候选项，value是该候选项出现在数据集交易中的笔数。   
+(4)support = candidate_count_dict\[key] / len(dataSet) * 1.0，计算某候选项的支持度 = 该候选项出现在数据集交易中的笔数 / 数据集的总交易笔数。   
+(5)只保留支持度>minSupport阈值的记录，从列表头部录入，形成频繁项集Lk。   
+(6)candidate_support_dict\[key] = support顺便记录每次计算的support，形成项集支持度矩阵。  
+4._calCandidateItemsSetCk：从频繁项集Lk-1中，提取两两交集为k项的项集，合并后排重录入下一级候选项集Ck。      
+5.apriori：   
+(1)调用_createC1构建候选项集C1。  
+(2)调用_calFrequentItemsSetLk，计算出频繁项集L1和候选项-支持度矩阵candidate_support_dict。   
+(3)将频繁项集压入一个列表，记录中间计算的每个Lk频繁项集的结果，并方便后面的迭代计算。  
+(4)从候选项集C2开始，通过支持度过滤生成L2。L2根据Apriori原理拼接成候选项集C3；C3通过支持度过滤生成L3……直到Lk中仅有一个或没有数据项为止。   
+
+
+
+
+
 
