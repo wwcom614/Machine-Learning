@@ -139,55 +139,56 @@ def aprioriScanFrequentItemsSetLmax(dataSet, minSupport=0.5):
     return L, candidate_support_dict
 
 
-# 基于入参，计算输出满足最小置信度的推荐物品列表
-# 入参freqSet：某个频繁项(一组物品)
-# 入参itemsOfFreqSet：某个频繁项freqSet中的每个物品集合
+# 基于入参，计算输出满足最小置信度的推荐物品列表，当preItems_recommedItems只有2个时，直接计算即可得到推荐物品列表
+# 入参preItems_recommedItems：某个频繁项(一组物品)，含义是前置物品+推荐物品的集合
+# 入参probRecommedItems：某个频繁项freqSet中的每个物品集合，含义是可能被推荐待分析物品集合
 # 入参supportData：前面计算好的项集支持度矩阵
-# 入参recommendTuples：(已有物品,推荐物品,置信度)的列表
+# 入参recommendTuples：(前置物品,推荐物品,置信度)的列表
 # 入参minConfidence：预制的超参数最小置信度
 # 返回值recommendItems：推荐物品列表
-def _calConfidence(freqSet, itemsOfFreqSet, supportData, recommendTuples, minConfidence=0.7):
+def _calConfidence(preItems_recommedItems, probRecommedItems, supportData, recommendTuples, minConfidence=0.7):
+    # 定义recommendItems，用于录入分析后的推荐物品
     recommendItems = []
-    # 遍历某个频繁项freqSet中的每个物品
-    for item in itemsOfFreqSet:
-        # 该物品的置信度= 包括该物品和前置物品的支持度 / 前置物品的支持度
-        confidence = supportData[freqSet] / supportData[freqSet - item]
+    # 遍历推荐物品集合中的每个物品
+    for recommedItem in probRecommedItems:
+        # 推荐的前置物品
+        preItems = preItems_recommedItems - recommedItem
+        # 该物品的置信度= 前置物品+推荐物品的支持度 / 前置物品的支持度
+        confidence = supportData[preItems_recommedItems] / supportData[preItems]
         # 过滤，只保留置信度高于预制置信度的数据
         if confidence >= minConfidence:
-            print(freqSet - item, '-->', item, 'confidence:', confidence)
+            print(preItems, '-->', recommedItem, 'confidence:', confidence)
             # 元组中的三个元素：前置物品集、推荐物品、置信度
-            recommendTuples.append((freqSet - item, item, confidence))
-            recommendItems.append(item)
-    # 返回后件列表
+            recommendTuples.append((preItems, recommedItem, confidence))
+            recommendItems.append(recommedItem)
+    # 返回推荐物品列表
     return recommendItems
 
-# 评估频繁项集中元素超过2个的项集进行合并
+
+# 当preItems_recommedItems>2个时，评估频繁项集中元素超过2个的项集进行合并
 # https://www.cnblogs.com/bigmonkey/p/7449761.html
-# 入参freqSet：某个频繁项(一组物品)
-# 入参itemsOfFreqSet：某个频繁项freqSet中的每个物品集合
+# 入参preItems_recommedItems：某个频繁项(一组物品)，含义是前置物品+推荐物品集合
+# 入参probRecommedItems：某个频繁项freqSet中的每个物品集合，含义是可能被推荐待分析物品集合
 # 入参supportData：前面计算好的项集支持度矩阵
-# 入参recommendTuples：(已有物品,推荐物品,置信度)的列表
+# 入参recommendTuples：(前置物品,推荐物品,置信度)的列表
 #
-def _rulesFromConseq(freqSet, itemsOfFreqSet, supportData, recommendTuples, minConfidence=0.7):
-    '''
-    。
+def _rulesFromConseq(preItems_recommedItems, probRecommedItems, supportData, recommendTuples, minConfidence=0.7):
+    # 定义recommendItems，用于录入分析后的推荐物品
+    recommendItems = []
 
-    freqSet(frozenset):频繁项集
-    H(frozenset):频繁项集中的所有元素，即可以出现在规则右部的元素
-    supportData(dict):所有项集的支持度信息
-    brl(tuple):生成的规则
-
-    '''
-    m = len(itemsOfFreqSet[0])
-    # 查看频繁项集是否大到移除大小为 m　的子集
-    if len(freqSet) > m + 1:
-        #
-        Hmp1 = _calCandidateItemsSetCk(itemsOfFreqSet, m + 1)
-        Hmp1 = _calConfidence(freqSet, Hmp1, supportData, recommendTuples, minConfidence)
+    # 前置物品+推荐物品集合preItems_recommedItems 要比 一个probRecommedItem元素 至少多2个，
+    # 多1个直接使用_calConfidence，即可计算出recommendTuples，对应已知多个物品，推荐1个物品的场景
+    # probRecommedItems经过_calCandidateItemsSetCk计算后，衍生出多物品组合，对应已知多个物品，推荐多个物品的场景
+    if len(preItems_recommedItems) > len(probRecommedItems[0]) + 1:
+        # m个物品项集 组合成 m+1个物品项集
+        recommendItems = _calCandidateItemsSetCk(probRecommedItems, len(probRecommedItems[0]) + 1)
+        # 看看新构建的m+1个物品项集，在freqSet基础上，置信度如何
+        recommendItems = _calConfidence(preItems_recommedItems, recommendItems, supportData, recommendTuples, minConfidence)
 
         # 如果不止一条规则满足要求，进一步递归合并
-        if len(Hmp1) > 1:
-            _rulesFromConseq(freqSet, Hmp1, supportData, recommendTuples, minConfidence)
+        if len(recommendItems) > 1:
+            _rulesFromConseq(preItems_recommedItems, recommendItems, supportData, recommendTuples, minConfidence)
+
 
 # 根据之前计算出的频繁项集L和预置超参数最小置信度生成推荐组合列表
 def aprioriGenerateRecommendTuples(L, supportData, minSupport=0.7):
@@ -195,17 +196,19 @@ def aprioriGenerateRecommendTuples(L, supportData, minSupport=0.7):
     recommendTuples = []
     # 对于寻找关联规则来说，频繁1项集L1没有用处，因为L1中的每个集合仅有一个数据项，至少有两个数据项才能生成A→B这样的关联规则
     # 所以从频繁项集L2开始逐个遍历
-    for i in range(1, len(L)):
-        # 遍历每个频繁项集Lk中的每个频繁项freqSet(一组物品)
-        for freqSet in L[i]:
-            # itemsOfFreqSet是每个频繁项freqSet中的每个物品集合
-            itemsOfFreqSet = [frozenset([item]) for item in freqSet]
+    for k in range(1, len(L)):
+        # 遍历每个频繁项集Lk中的每个频繁项preItems_recommedItems(一组物品)
+        for preItems_recommedItems in L[k]:
+            # recommedItems是每个preItems_recommedItems中的每个物品集合，每个都有可能是推荐物品
+            recommedItems = [frozenset([item]) for item in preItems_recommedItems]
 
-            # 如果频繁项集中的元素个数大于2，需要进一步合并
-            if i > 1:
-                _rulesFromConseq(freqSet, itemsOfFreqSet, supportData, recommendTuples, minSupport)
+            # 总共2个物品的频繁项集L2中，寻找置信度超过minConfidence的A→B的组合
+            if k == 1:
+                _calConfidence(preItems_recommedItems, recommedItems, supportData, recommendTuples, minSupport)
+            # 超过2个物品的频繁项集Lk
             else:
-                _calConfidence(freqSet, itemsOfFreqSet, supportData, recommendTuples, minSupport)
+                _rulesFromConseq(preItems_recommedItems, recommedItems, supportData, recommendTuples, minSupport)
+
     return recommendTuples
 
 
