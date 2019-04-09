@@ -248,7 +248,7 @@ scikit-learn随机森林分类器 和 Extra Trees分类器。
 用户-用户购买物品行为相似协同过滤。内部方法与ItemBasedCF基本一致，calItemsSimilarity方法和recommend方法有所区别。  
 1.calItemsSimilarity方法，计算输出 用户u-用户v 相似度矩阵：  
 (1)构建物品-不同购买用户列表的字典item_diffUsers：key是itemId，value是购买该item的不同用户set集合。  
-(2)构建每个用户-购买物品数量的字典user_itemsCount：遍历item_diffUsers，按每个用户统计，累计每个用户-购买物品数量。       
+(2)因不是所有的物品都有人买，为降低计算量，不是遍历整个数据集，而是遍历物品-不同购买用户列表的字典item_diffUsers，按每个用户统计，累计每个用户-购买物品数量。       
 (3)构建用户u-用户v共现矩阵co_useru_userv：用户u-用户v共现矩阵中，如果是自身，不打标记，直接跳过；用户u和用户v对某itemId都有购买，计数+1。       
 (4)用户u-用户v 相似度矩阵 {u:{v:相似度, ...}, ...}userSimiMatrix：遍历用户u-用户v共现矩阵，计算物品i和物品j的余弦相似度矩阵userSimiMatrix\[u]\[v]=cuv/math.sqrt(user_itemsCount\[u]\*user_itemsCount\[v])。     
 2.recommend方法，给用户userU推荐topN个最相似的物品： 
@@ -258,10 +258,16 @@ scikit-learn随机森林分类器 和 Extra Trees分类器。
 (4)考虑相似度最高的物品userV_item的评分影响，相似度=simiUV * userV_score加权，取相似度最高的topN个物品j，作为最终推荐结果。  
 
 - Apriori.py   
-经典的啤酒与尿布算法，寻找超参数支持度minSupport下的最大频繁项集Lk。 
+经典的啤酒与尿布算法，满足一定支持度的情况下，寻找置信度达到阈值的所有商品组合，一般用于相关产品推荐，实现方法有Apriori和FPGrowth算法，一般用后者。  
+Apriori算法的缺点是需要多次遍历数据集，磁盘I/O次数太多，效率比较低下。预制支持度过低会导致候补集很大。  
+FPGrowth算法只需要遍历2次数据集：第1次遍历获得单个物品的频率，去掉不满足支持度的项，然后按支持度对过滤后的项排序。
+第2次遍历建立一棵FP-Tree。 
+Apriori算法先寻找大于超参数支持度minSupport的频繁项集Lk，以及生成项集-支持度矩阵。 
+然后基于上述结果，计算大于超参数置信度minConfidence的元组列表recommendTuples，元组中有三个元素：前置物品集、推荐物品、置信度，如果是多个要先合并再计算置信度。  
+最终生成推荐规则recommendTuples和推荐列表。  
 1.loadData：读取所有用户购买的商品信息，将加载数据集data的每笔交易内按物品排重，录入dataSet。  
 2._createC1：构建候选项集C1。C1中物品排重，顺序排序，使用frozenset标识C1为不可变集合。  
-3._calFrequentItemsSetLk，从候选项集Ck中，提取支持度>minSupport的项们，录入频繁项集Lk：  
+3._calFrequentItemsLk，从候选项集Ck中，提取支持度>minSupport的项们，录入频繁项集Lk：  
 注：k的含义是每笔交易含k个物品。   
 (1)入参：物品排重数据集dataSet、候选项集Ck、最小支持度阈值minSupport。  
 (2)每次遍历前，对数据集做过滤，只保留>=候选项集每笔交易中物品数量的交易记录，减少数据量和遍历次数，节约计算资源，提高计算性能。  
@@ -269,15 +275,42 @@ scikit-learn随机森林分类器 和 Extra Trees分类器。
 (4)support = candidate_count_dict\[key] / len(dataSet) * 1.0，计算某候选项的支持度 = 该候选项出现在数据集交易中的笔数 / 数据集的总交易笔数。   
 (5)只保留支持度>minSupport阈值的记录，从列表头部录入，形成频繁项集Lk。   
 (6)candidate_support_dict\[key] = support顺便记录每次计算的support，形成项集支持度矩阵。  
-4._calCandidateItemsSetCk：从频繁项集Lk-1中，提取两两交集为k项的项集，合并后排重录入下一级候选项集Ck。      
-5.apriori：   
+4._calCandidateItemsCk：  
+从频繁项集Lk-1中，提取两两交集为k项的项集，合并后排重录入下一级候选项集Ck。   
+两个k-1个项集相与如果有k-2个元素相同，那么说明各自都有1个元素不同，那么相或组合时才能组合成k个元素的候选项集Ck。     
+5.apriori_Generate_L_CandidateSupport：  
+迭代寻找交易含k个物品的最大频繁项集Lk：C1->L1->C2->L2->C3->L3->....->Ck->Lk。   
 (1)调用_createC1构建候选项集C1。  
-(2)调用_calFrequentItemsSetLk，计算出频繁项集L1和候选项-支持度矩阵candidate_support_dict。   
+(2)调用_calFrequentItemsLk，计算出频繁项集L1和候选项-支持度矩阵candidate_support_dict。   
 (3)将频繁项集压入一个列表，记录中间计算的每个Lk频繁项集的结果，并方便后面的迭代计算。  
 (4)从候选项集C2开始，通过支持度过滤生成L2。L2根据Apriori原理拼接成候选项集C3；C3通过支持度过滤生成L3……直到Lk中仅有一个或没有数据项为止。   
+6._calConfidence(preItems_recommedItems, probRecommedItems, supportData, recommendTuples, minConfidence=0.7)：  
+当preItems_recommedItems只有2个时，基于入参，计算输出满足最小置信度的推荐物品列表，对应已知1个物品，推荐多个物品的场景。     
+入参preItems_recommedItems：某个频繁项(一组物品)，含义是前置物品+推荐物品的集合。  
+入参probRecommedItems：某个频繁项freqSet中的每个物品集合，含义是可能被推荐待分析物品集合。  
+入参supportData：前面计算好的项集支持度矩阵。  
+入参recommendTuples：(前置物品,推荐物品,置信度)的列表。  
+入参minConfidence：预制的超参数最小置信度。 
+返回值recommendItems：推荐物品列表。  
+(1)定义recommendItems[]，用于录入分析后的推荐物品。   
+(2)遍历推荐物品集合中的每个物品，获取推荐的前置物品。  
+(3)该物品的置信度= 前置物品+推荐物品的支持度 / 前置物品的支持度。  
+(4)过滤，只保留置信度高于预制置信度的数据。  
+(5)生成元组列表recommendTuples，元组中有三个元素：前置物品集、推荐物品、置信度。  
+(6)返回推荐物品列表recommendItems。  
+7._mergeAndCalConfidence(preItems_recommedItems, probRecommedItems, supportData, recommendTuples, minConfidence=0.7)：  
+当preItems_recommedItems>2个时，要先进行项集合并，然后再进行置信度计算筛选。  
+入参与_calConfidence相同。   
+(1)前置物品+推荐物品集合preItems_recommedItems 要比 一个probRecommedItem元素 至少多2个。因为多1个，可直接使用_calConfidence，即可计算出recommendTuples，对应已知1个物品，推荐多个物品的场景。  
+(2)使用_calCandidateItemsCk，将m个物品项集 合并成 m+1个物品项集。  
+(3)看看新构建的m+1个物品项集，在freqSet基础上，置信度如何。  
+(4)如果计算出的推荐物品项recommendItems不止一个，进一步递归合并，合并成 前置物品-推荐物品项列表。  
+8.apriori_Generate_RecommendTuples：  
+根据之前计算出的频繁项集L、项集-支持度矩阵、预置超参数最小置信度，调用_calConfidence和_mergeAndCalConfidence，生成推荐组合列表recommendTuples。  
+(1)对于寻找关联推荐列表来说，频繁1项集L1没有用处，因为L1中的每个集合仅有一个数据项，至少有两个数据项才能生成A→B这样的关联规则，所以从频繁项集L2开始逐个遍历。  
+(2)总共2个物品的频繁项集L2中，调用_calConfidence，寻找置信度超过minConfidence的A→B的组合。  
+(3)超过2个物品的频繁项集Lk，调用_mergeAndCalConfidence，寻找置信度超过minConfidence的A→{B1,B2,...,Bn}的组合。  
 
-
-
-
+ 
 
 

@@ -26,6 +26,7 @@ class UserBasedCF:
 
     # 计算输出 用户u-用户v 相似度矩阵
     def calUserSimilarity(self):
+        # 因不是所有的物品都有人买，为降低计算量
         # 构建物品-不同购买用户列表的字典item_diffUsers：key是itemId，value是购买该item的不同用户set集合
         item_diffUsers=dict()
         for u,items in self.train.items():
@@ -40,7 +41,7 @@ class UserBasedCF:
 
         # 用户u-用户v共现矩阵
         co_useru_userv=dict()
-
+        #因不是所有的物品都有人买，为降低计算量，不是遍历整个数据集，而是遍历物品-不同购买用户列表的字典item_diffUsers
         for item,users in item_diffUsers.items():
             for u in users:
                 # 遍历item_diffUsers，按每个用户统计，累计每个用户-购买物品数量。
